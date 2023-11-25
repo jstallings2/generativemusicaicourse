@@ -1,5 +1,8 @@
+import os
 import numpy as np
-from music21 import metadata, note, stream
+from music21 import metadata, note, stream, converter
+
+KERN_DATASET_PATH = "./deutschl/test/"
 
 
 class MarkovChainMelodyGenerator:
@@ -29,6 +32,8 @@ class MarkovChainMelodyGenerator:
         """
         self._calculate_initial_probabilities(notes)
         self._calculate_transition_matrix(notes)
+        print('final init probabilities: ', self.initial_probabilities)
+        print('final transition matrix: ', self.transition_matrix)
 
     def generate(self, length):
         """
@@ -106,6 +111,7 @@ class MarkovChainMelodyGenerator:
         self.transition_matrix[
             self._state_indexes[state], self._state_indexes[next_state]
         ] += 1
+        print(' updated transition: ', self.transition_matrix)
 
     def _normalize_transition_matrix(self):
         """
@@ -180,7 +186,7 @@ class MarkovChainMelodyGenerator:
         return self.transition_matrix[self._state_indexes[state]].sum() > 0
 
 
-def create_training_data():
+def create_training_data(dataset_path):
     """
     Creates a list of sample training notes for the melody of "Twinkle
     Twinkle Little Star."
@@ -188,22 +194,83 @@ def create_training_data():
     Returns:
         - list: A list of music21.note.Note objects.
     """
-    return [
-        note.Note("C5", quarterLength=1),
-        note.Note("C5", quarterLength=1),
-        note.Note("G5", quarterLength=1),
-        note.Note("G5", quarterLength=1),
-        note.Note("A5", quarterLength=1),
-        note.Note("A5", quarterLength=1),
-        note.Note("G5", quarterLength=2),
-        note.Note("F5", quarterLength=1),
-        note.Note("F5", quarterLength=1),
-        note.Note("E5", quarterLength=1),
-        note.Note("E5", quarterLength=1),
-        note.Note("D5", quarterLength=1),
-        note.Note("D5", quarterLength=1),
-        note.Note("C5", quarterLength=2),
-    ]
+    if not dataset_path:
+        data = [
+            note.Note("C5", quarterLength=1),
+            note.Note("C5", quarterLength=1),
+            note.Note("G5", quarterLength=1),
+            note.Note("G5", quarterLength=1),
+            note.Note("A5", quarterLength=1),
+            note.Note("A5", quarterLength=1),
+            note.Note("G5", quarterLength=2),
+            note.Note("F5", quarterLength=1),
+            note.Note("F5", quarterLength=1),
+            note.Note("E5", quarterLength=1),
+            note.Note("E5", quarterLength=1),
+            note.Note("D5", quarterLength=1),
+            note.Note("D5", quarterLength=1),
+            note.Note("C5", quarterLength=2),
+        ]
+        states = [
+        ("C5", 1),
+        ("D5", 1),
+        ("E5", 1),
+        ("F5", 1),
+        ("G5", 1),
+        ("A5", 1),
+        ("C5", 2),
+        ("D5", 2),
+        ("E5", 2),
+        ("F5", 2),
+        ("G5", 2),
+        ("A5", 2),
+        ]
+        return data, states 
+    # read in the notes from the song
+    song = load_song_in_kern(dataset_path)
+    data = []
+    states = set()
+
+    # for each note,
+    for el in song.recurse().notes:
+        print(el.pitch.nameWithOctave,
+            el.duration.quarterLength)
+        # add the note/dur tuple to the "states" if it's a note we haven't seen
+        states.add((el.pitch.nameWithOctave, el.duration.quarterLength))
+        # add the m21.note.Note to the "data"
+        data.append(el)
+
+    # print ('data: ', data)
+    # print('states: ', states)
+    return data, list(states)
+
+def load_song_in_kern(dataset_path):
+    # go through all the files in dataset and load them with music21
+    # with the return in here we just do the first song
+    # @returns a Music21 Stream
+    for path, subdirs, files in os.walk(dataset_path):
+        for file in files:
+            if file[-3:] == 'krn':
+                return converter.parse(os.path.join(path, file))
+            
+    print('Error loading score')
+
+def preprocess(dataset_path):
+    pass
+
+    # load the folk songs
+    print("Loading song...")
+    song = load_song_in_kern(dataset_path)
+
+    # filter out songs that have non-acceptable durations
+    # (DONT NEED)
+
+    # transpose songs to Cmaj/Amin
+    # (DONT NEED?)
+
+    # encode songs with music time series representation
+
+    # save songs to text file
 
 
 def visualize_melody(melody):
@@ -227,22 +294,9 @@ def main():
     """Main function for training the chain, generating a melody, and
     visualizing the result."""
 
-    training_data = create_training_data()
+    training_data, states = create_training_data(KERN_DATASET_PATH)
 
-    states = [
-        ("C5", 1),
-        ("D5", 1),
-        ("E5", 1),
-        ("F5", 1),
-        ("G5", 1),
-        ("A5", 1),
-        ("C5", 2),
-        ("D5", 2),
-        ("E5", 2),
-        ("F5", 2),
-        ("G5", 2),
-        ("A5", 2),
-    ]
+    
     model = MarkovChainMelodyGenerator(states)
     model.train(training_data)
 
